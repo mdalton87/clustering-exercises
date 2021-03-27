@@ -6,6 +6,35 @@ from sklearn.model_selection import train_test_split
 from scipy import stats
 
 
+
+def missing_zero_values_table(df):
+    '''
+    This function tales in a dataframe and counts number of Zero values and NULL values. Returns a Table with counts and percentages of each value type.
+    '''
+    zero_val = (df == 0.00).astype(int).sum(axis=0)
+    mis_val = df.isnull().sum()
+    mis_val_percent = 100 * df.isnull().sum() / len(df)
+    mz_table = pd.concat([zero_val, mis_val, mis_val_percent], axis=1)
+    mz_table = mz_table.rename(
+    columns = {0 : 'Zero Values', 1 : 'NULL Values', 2 : '% of Total NULL Values'})
+    mz_table['Total Zero\'s plus NULL Values'] = mz_table['Zero Values'] + mz_table['NULL Values']
+    mz_table['% Total Zero\'s plus NULL Values'] = 100 * mz_table['Total Zero\'s plus NULL Values'] / len(df)
+    mz_table['Data Type'] = df.dtypes
+    mz_table = mz_table[
+        mz_table.iloc[:,1] >= 0].sort_values(
+    '% of Total NULL Values', ascending=False).round(1)
+    print ("Your selected dataframe has " + str(df.shape[1]) + " columns and " + str(df.shape[0]) + " Rows.\n"      
+        "There are " + str((mz_table['NULL Values'] != 0).sum()) +
+          " columns that have NULL values.")
+    #       mz_table.to_excel('D:/sampledata/missing_and_zero_values.xlsx', freeze_panes=(1,0), index = False)
+    return mz_table
+
+
+
+
+
+
+
 def explore_univariate(train, cat_vars, quant_vars):
     for var in cat_vars:
         explore_univariate_categorical(train, var)

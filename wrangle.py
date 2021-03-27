@@ -25,8 +25,7 @@ def get_connection(db, user=user, host=host, password=password):
     '''
     return f'mysql+pymysql://{user}:{password}@{host}/{db}'    
        
-
-# Zillow Database        
+    # Zillow Database        
         
 def new_zillow_data():
     '''
@@ -34,22 +33,25 @@ def new_zillow_data():
     and returns a pandas DataFrame with all columns.
     '''
     sql_query = '''
-                        select *
-                        from properties_2017
-                        # the joins
-                        join predictions_2017 using(parcelid)
-                        left join airconditioningtype using(airconditioningtypeid)
-                        left join architecturalstyletype using(architecturalstyletypeid)
-                        left join buildingclasstype using(buildingclasstypeid)
-                        left join heatingorsystemtype using(heatingorsystemtypeid)
-                        left join storytype using(storytypeid)
-                        left join typeconstructiontype using(typeconstructiontypeid)
-                        where transactiondate in (
-                                                select max(transactiondate)
-                                                from predictions_2017
-                                                group by parcelid
-                                                 )
-                        ;
+    
+select *
+from properties_2017
+
+join (
+			select parcelid, max(logerror) as logerror, max(transactiondate) as transactiondate
+			from predictions_2017
+			group by parcelid
+		) as pred_17
+	using(parcelid)
+left join airconditioningtype using(airconditioningtypeid)
+left join architecturalstyletype using(architecturalstyletypeid)
+left join buildingclasstype using(buildingclasstypeid)
+left join heatingorsystemtype using(heatingorsystemtypeid)
+left join storytype using(storytypeid)
+left join typeconstructiontype using(typeconstructiontypeid)
+
+where year(transactiondate) = 2017
+;
                 '''
     
     return pd.read_sql(sql_query, get_connection('zillow'))
@@ -113,7 +115,7 @@ This function creates the dataframe used to calculate the tax distribution rate 
 
 def remove_outliers(df, col, multiplier):
     '''
-    
+    The function takes in a dataframe, column as str, and an iqr multiplier as a float. Returns dataframe with outliers removed.
     '''
     q1 = df[col].quantile(.25)
     q3 = df[col].quantile(.75)
@@ -128,15 +130,15 @@ def remove_outliers(df, col, multiplier):
 
 # Split Data
 
-def impute_mode(df):
+def impute_mode(df, col, strategy):
     '''
-    impute mode for regionidzip
+    impute mode for column as str
     '''
     train, validate, test = train_validate_test_split(df, seed=123)
-    imputer = SimpleImputer(strategy='most_frequent')
-    train[['regionidzip']] = imputer.fit_transform(train[['regionidzip']])
-    validate[['regionidzip']] = imputer.transform(validate[['regionidzip']])
-    test[['regionidzip']] = imputer.transform(test[['regionidzip']])
+    imputer = SimpleImputer(strategy=strategy)
+    train[[col]] = imputer.fit_transform(train[[col]])
+    validate[[col]] = imputer.transform(validate[[col]])
+    test[[col]] = imputer.transform(test[[col]])
     return train, validate, test
 
 
