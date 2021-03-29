@@ -30,7 +30,7 @@ def get_connection(db, user=user, host=host, password=password):
         
 def new_zillow_data():
     '''
-    This function reads in the teclo_churn data from the Codeup db
+    This function reads the zillow data from the Codeup db
     and returns a pandas DataFrame with all columns.
     '''
     sql_query = '''
@@ -57,7 +57,7 @@ where year(transactiondate) = 2017
     
     return pd.read_sql(sql_query, get_connection('zillow'))
         
-        
+    
         
 def get_zillow_data(cached=False):
     '''
@@ -79,7 +79,45 @@ def get_zillow_data(cached=False):
     return df
 
 
-# Prepare Data
+
+# Mall_customers
+
+def new_mall_data():
+    '''
+    This function reads in the mall_customers data from the Codeup db
+    and returns a pandas DataFrame with all columns.
+    '''
+    sql_query = '''
+                    select *
+                    from customers;
+                '''
+    
+    return pd.read_sql(sql_query, get_connection('mall_customers'))
+        
+    
+        
+def get_mall_data(cached=False):
+    '''
+    This function reads in zillow data from Codeup database and writes data to a csv file if cached == False or if cached == True reads in titanic df from a csv file, returns df.
+    '''
+    if cached == False or os.path.isfile('mall_customers.csv') == False:
+        
+        # Read fresh data from db into a DataFrame.
+        df = new_mall_data()
+        
+        # Write DataFrame to a csv file.
+        df.to_csv('mall_customers.csv')
+        
+    else:
+        
+        # If csv file exists or cached == True, read in data from csv.
+        df = pd.read_csv('mall_customers.csv', index_col=0)
+        
+    return df
+
+
+
+# Wrangle Zillow Data
 
 
 def wrangle_zillow():
@@ -128,6 +166,44 @@ def wrangle_zillow():
     return df
 
 
+def tax_rate_distribution():
+    '''
+This function creates the dataframe used to calculate the tax distribution rate per county. It takes in the cached zillow dataset, sets the parcelid as the index, makes the features list in order to limit the dataframe, renames the columns for clarity, drops null values, creates the tax_rate feature, and removed outliers from tax_rate and tx_value.
+    '''
+    df = get_zillow_data(cached=True)
+    df.set_index('parcelid', inplace=True)
+    features = ['fips', 'taxvaluedollarcnt', 'taxamount']
+    df = df[features]
+    
+    df.columns = ['fips', 'tax_value', 'tax_amount']
+    
+    df = df.dropna()
+    
+    df['tax_rate'] = (df.tax_amount / df.tax_value)
+    
+    df = remove_outliers(df, 'tax_rate', 2.5)
+    df = remove_outliers(df, 'tax_value', 2.5)
+    
+    return df
+
+
+# Wrangle Mall_customers
+
+def wrangle_mall():
+    df = get_mall_data(cached=True)
+    df = remove_outliers(df, 'annual_income', 1.5)
+    df = pd.get_dummies(df, columns=['gender'], drop_first=True)
+
+    train, validate, test, X_train, y_train, X_validate, y_validate, X_test, y_test = train_validate_test_split(df, 'annual_income', 42)
+
+    
+    object_cols = get_object_cols(X_train)
+    numeric_cols = get_numeric_X_cols(X_train, object_cols)
+    X_train_scaled, X_validate_scaled, X_test_scaled = min_max_scale(X_train, X_validate, X_test, numeric_cols)
+    
+    return train, validate, test, X_train, y_train, X_validate, y_validate, X_test, y_test, X_train_scaled, X_validate_scaled, X_test_scaled
+
+# Prepare Everything
 
 def handle_missing_values(df, prop_to_drop_col, prop_to_drop_row):
     '''
@@ -158,26 +234,6 @@ def impute_knn(df, list_of_features, knn):
     return df
 
 
-def tax_rate_distribution():
-    '''
-This function creates the dataframe used to calculate the tax distribution rate per county. It takes in the cached zillow dataset, sets the parcelid as the index, makes the features list in order to limit the dataframe, renames the columns for clarity, drops null values, creates the tax_rate feature, and removed outliers from tax_rate and tx_value.
-    '''
-    df = get_zillow_data(cached=True)
-    df.set_index('parcelid', inplace=True)
-    features = ['fips', 'taxvaluedollarcnt', 'taxamount']
-    df = df[features]
-    
-    df.columns = ['fips', 'tax_value', 'tax_amount']
-    
-    df = df.dropna()
-    
-    df['tax_rate'] = (df.tax_amount / df.tax_value)
-    
-    df = remove_outliers(df, 'tax_rate', 2.5)
-    df = remove_outliers(df, 'tax_value', 2.5)
-    
-    return df
-
 
 def remove_outliers(df, col, multiplier):
     '''
@@ -200,7 +256,7 @@ def impute_mode(df, col, strategy):
     '''
     impute mode for column as str
     '''
-    train, validate, test = train_validate_test_split(df, seed=123)
+    train, validate, test = train_validate_test_split(df, seed=42)
     imputer = SimpleImputer(strategy=strategy)
     train[[col]] = imputer.fit_transform(train[[col]])
     validate[[col]] = imputer.transform(validate[[col]])
@@ -209,7 +265,17 @@ def impute_mode(df, col, strategy):
 
 
 def train_validate_test_split(df, target, seed):
-    
+    '''
+    this function takes in a dataframe and splits it into 3 samples, 
+    a test, which is 20% of the entire dataframe, 
+    a validate, which is 24% of the entire dataframe,
+    and a train, which is 56% of the entire dataframe. 
+    It then splits each of the 3 samples into a dataframe with independent variables
+    and a series with the dependent, or target variable. 
+    The function returns 3 dataframes and 3 series:
+    X_train (df) & y_train (series), X_validate & y_validate, X_test & y_test. 
+
+    '''
     # Train, Validate, and test
     train_and_validate, test = train_test_split(
         df, test_size=0.2, random_state=seed)
@@ -286,37 +352,24 @@ def rfe(x, y, k):
     return rfe_feature
 
 
-def train_validate_test(df, target):
-    '''
-    this function takes in a dataframe and splits it into 3 samples, 
-    a test, which is 20% of the entire dataframe, 
-    a validate, which is 24% of the entire dataframe,
-    and a train, which is 56% of the entire dataframe. 
-    It then splits each of the 3 samples into a dataframe with independent variables
-    and a series with the dependent, or target variable. 
-    The function returns 3 dataframes and 3 series:
-    X_train (df) & y_train (series), X_validate & y_validate, X_test & y_test. 
-    '''
-    # split df into test (20%) and train_validate (80%)
-    train_validate, test = train_test_split(df, test_size=.2, random_state=123)
 
-    # split train_validate off into train (70% of 80% = 56%) and validate (30% of 80% = 24%)
-    train, validate = train_test_split(train_validate, test_size=.3, random_state=123)
+
+def get_object_cols(df):
+    '''
+    This function takes in a dataframe and identifies the columns that are object types
+    and returns a list of those column names. 
+    '''
+    # create a mask of columns whether they are object type or not
+    mask = np.array(df.dtypes == "object")
 
         
-    # split train into X (dataframe, drop target) & y (series, keep target only)
-    X_train = train.drop(columns=[target])
-    y_train = train[target]
+    # get a list of the column names that are objects (from the mask)
+    object_cols = df.iloc[:, mask].columns.tolist()
     
-    # split validate into X (dataframe, drop target) & y (series, keep target only)
-    X_validate = validate.drop(columns=[target])
-    y_validate = validate[target]
-    
-    # split test into X (dataframe, drop target) & y (series, keep target only)
-    X_test = test.drop(columns=[target])
-    y_test = test[target]
-    
-    return X_train, y_train, X_validate, y_validate, X_test, y_test
+    return object_cols
+
+
+
 
 def get_numeric_X_cols(X_train, object_cols):
     '''
@@ -326,6 +379,7 @@ def get_numeric_X_cols(X_train, object_cols):
     numeric_cols = [col for col in X_train.columns.values if col not in object_cols]
     
     return numeric_cols
+
 
 
 def min_max_scale(X_train, X_validate, X_test, numeric_cols):
@@ -363,21 +417,3 @@ def min_max_scale(X_train, X_validate, X_test, numeric_cols):
 
     
     return X_train_scaled, X_validate_scaled, X_test_scaled
-
-
-def get_object_cols(df):
-    '''
-    This function takes in a dataframe and identifies the columns that are object types
-    and returns a list of those column names. 
-    '''
-    # create a mask of columns whether they are object type or not
-    mask = np.array(df.dtypes == "object")
-
-        
-    # get a list of the column names that are objects (from the mask)
-    object_cols = df.iloc[:, mask].columns.tolist()
-    
-    return object_cols
-
-
-
