@@ -92,6 +92,23 @@ This functions creates a dataframe from the zillow dataset.
     return df
 
 
+
+def handle_missing_values(df, prop_to_drop_col, prop_to_drop_row):
+    '''
+    This function takes in a dataframe, 
+    a number between 0 and 1 that represents the proportion, for each column, of rows with non-missing values required to keep the column, 
+    a another number between 0 and 1 that represents the proportion, for each row, of columns/variables with non-missing values required to keep the row, 
+    and returns the dataframe with the columns and rows dropped as indicated.
+    '''
+    # drop cols > thresh, axis = 1 == cols
+    df = df.dropna(axis=1, thresh = prop_to_drop_col * df.shape[0])
+    # drop rows > thresh, axis = 0 == rows
+    df = df.dropna(axis=0, thresh = prop_to_drop_row * df.shape[1])
+    return df
+
+
+
+
 def tax_rate_distribution():
     '''
 This function creates the dataframe used to calculate the tax distribution rate per county. It takes in the cached zillow dataset, sets the parcelid as the index, makes the features list in order to limit the dataframe, renames the columns for clarity, drops null values, creates the tax_rate feature, and removed outliers from tax_rate and tx_value.

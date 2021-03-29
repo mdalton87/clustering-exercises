@@ -30,9 +30,18 @@ def missing_zero_values_table(df):
     return mz_table
 
 
-
-
-
+def missing_columns(df):
+    '''
+    This function takes a dataframe, counts the number of null values in each row, and converts the information into another dataframe. Adds percent of total columns.
+    '''
+    missing_cols_df = pd.Series(data=df.isnull().sum(axis = 1).value_counts().sort_index(ascending=False))
+    missing_cols_df = pd.DataFrame(missing_cols_df)
+    missing_cols_df = missing_cols_df.reset_index()
+    missing_cols_df.columns = ['total_missing_cols','num_rows']
+    missing_cols_df['percent_cols_missing'] = round(100 * missing_cols_df.total_missing_cols / df.shape[1], 2)
+    missing_cols_df['percent_rows_affected'] = round(100 * missing_cols_df.num_rows / df.shape[0], 2)
+    
+    return missing_cols_df
 
 
 def explore_univariate(train, cat_vars, quant_vars):
