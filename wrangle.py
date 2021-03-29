@@ -8,12 +8,13 @@ from env import host, user, password
 from pydataset import data
 
 from sklearn.model_selection import train_test_split
-from sklearn.impute import SimpleImputer
+from sklearn.impute import SimpleImputer, KNNImputer
 from sklearn.metrics import mean_squared_error, r2_score, explained_variance_score
 from sklearn.linear_model import LinearRegression
 from sklearn.feature_selection import f_regression, RFE, SelectKBest
 import sklearn.preprocessing
 from sklearn.preprocessing import MinMaxScaler 
+
 
 
 # Aquire Data
@@ -83,11 +84,46 @@ def get_zillow_data(cached=False):
 
 def wrangle_zillow():
     '''
-This functions creates a dataframe from the zillow dataset.           
+    This functions creates a dataframe from the zillow dataset and returns a cleaned and imputed version of the dataframe.
     '''
+    # Takes in data from Codeup SQL server
     df = get_zillow_data(cached=True)
-    
-
+    # Remove rows with nulls in lat and long
+    df = df[df.latitude.notnull()]
+    df = df[df.longitude.notnull()]
+    # Isolated Single Unit Properties
+    df.propertylandusetypeid = df.propertylandusetypeid.astype(int)
+    x='propertylandusetypeid'
+    df = df[df[x] != 31]
+    df = df[df[x] != 246]
+    df = df[df[x] != 247]
+    df = df[df[x] != 248]
+    df = df[df[x] != 269]
+    # Imputed mode in the feature unitcnt
+    df.unitcnt.fillna(1, inplace=True)
+    df = df[df.unitcnt == 1]
+    # Removing column s and rows outside specifies threshhold
+    df = handle_missing_values(df, 0.6, 0.75)
+    # Drop a list of columns with too few 0 values, duplicate features, and vague values
+    dropcols = ['id', 'heatingorsystemtypeid', 'buildingqualitytypeid', 'propertyzoningdesc', 'heatingorsystemdesc', 'calculatedbathnbr', 'regionidzip', 'regionidcity', 'finishedsquarefeet12', 'fullbathcnt', 'censustractandblock', 'roomcnt']
+    df = df.drop(columns=dropcols)
+    # Dropped null from the property value features
+    df = df[df.taxvaluedollarcnt.notnull()]
+    df = df[df.structuretaxvaluedollarcnt.notnull()]
+    df = df[df.taxamount.notnull()]
+    df = df[df.calculatedfinishedsquarefeet.notnull()]
+    # changed fips to an int
+    df.fips = df.fips.astype(int)
+    # Used kNN Imputer to fill in yearbuilt and lotsizesquarefeet
+    features1 = ['yearbuilt','latitude','longitude','fips']
+    df = impute_knn(df, features1, 4)
+    features2 = ['lotsizesquarefeet','latitude','longitude','fips','calculatedfinishedsquarefeet']
+    df = impute_knn(df, features2, 4)
+    # 0 values for beds and baths are useless.
+    df = df[df.bedroomcnt != 0]
+    df = df[df.bathroomcnt != 0]
+    # clean up column names
+    df.columns = ['parcelid', 'bathrooms', 'bedrooms', 'property_sqft', 'fips', 'latitude', 'longitude', 'lot_sqft', 'prop_cnty_land_code', 'prop_land_type_id', 'census_tract_and_block', 'region_id_county', 'unitcnt', 'year_built', 'struct_tax_value', 'tax_value', 'assessment_year', 'land_tax_value', 'tax_amount', 'log_error', 'transaction_date']
     
     return df
 
@@ -107,6 +143,19 @@ def handle_missing_values(df, prop_to_drop_col, prop_to_drop_row):
     return df
 
 
+def impute_knn(df, list_of_features, knn):
+    '''
+    This function performs a kNN impute on a dataframe and returns an imputed df.
+    Parameters: df: dataframee
+    list_of_features: a List of features, place the feature intended for impute first, then supporting features after.
+    knn: an integer, indicates number of neighbors to find prior to selecting imputed value.
+    '''
+    knn_cols_df = df[list_of_features]
+    imputer = KNNImputer(n_neighbors=knn)
+    imputed = imputer.fit_transform(knn_cols_df)
+    imputed = pd.DataFrame(imputed, index = df.index)
+    df[list_of_features[0]] = imputed[[0]]
+    return df
 
 
 def tax_rate_distribution():
