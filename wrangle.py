@@ -143,8 +143,12 @@ def wrangle_zillow():
     # Removing column s and rows outside specifies threshhold
     df = handle_missing_values(df, 0.6, 0.75)
     # Drop a list of columns with too few 0 values, duplicate features, and vague values
-    dropcols = ['id', 'heatingorsystemtypeid', 'buildingqualitytypeid', 'propertyzoningdesc', 'heatingorsystemdesc', 'calculatedbathnbr', 'regionidzip', 'regionidcity', 'regionidcounty', 'finishedsquarefeet12', 'fullbathcnt', 'censustractandblock', 'roomcnt']
-    df = df.drop(columns=dropcols)
+    
+    
+#     dropcols = ['id', 'heatingorsystemtypeid', 'buildingqualitytypeid', 'propertyzoningdesc', 'heatingorsystemdesc', 'calculatedbathnbr', 'unitcnt', 'regionidzip', 'regddionidcity', 'regionidcounty', 'finishedsquarefeet12', 'fullbathcnt', 'censustractandblock', 'assessmentyear', 'roomcnt']
+#     df = df.drop(columns=dropcols)
+
+
     # Dropped null from the property value features
     df = df[df.taxvaluedollarcnt.notnull()]
     df = df[df.structuretaxvaluedollarcnt.notnull()]
@@ -161,15 +165,23 @@ def wrangle_zillow():
     df = df[df.bedroomcnt != 0]
     df = df[df.bathroomcnt != 0]
     # Dummy FiPs
-    df = pd.get_dummies(df, columns=['fips'], drop_first=True)
-    # clean up column names
-    df.columns = ['parcelid', 'bathrooms', 'bedrooms', 'property_sqft', 'fips', 'latitude', 'longitude', 'lot_sqft', 'prop_cnty_land_code', 'prop_land_type_id', 'census_tract_and_block', 'unitcnt', 'year_built', 'struct_tax_value', 'tax_value', 'assessment_year', 'land_tax_value', 'tax_amount', 'log_error', 'transaction_date'] #, 'orange_cnty', 'ventura_cnty']
+    dummy_df =  pd.get_dummies(df['fips'])
+    dummy_df.columns = ['la_cnty', 'orange_cnty', 'ventura_cnty']
+    df = pd.concat([df, dummy_df], axis=1)    # clean up column names
     
-    df['log_error_class'] = pd.qcut(df.log_error, q=4, labels=['s1', 's2', 's3', 's4'])
+#     df.columns = ['parcelid', 'bathrooms', 'bedrooms', 'property_sqft', 'fips', 'latitude', 'longitude', 'lot_sqft', 'prop_cnty_land_code', 'prop_land_type_id', 'census_data', 'year_built', 'struct_tax_value', 'tax_value', 'land_tax_value', 'tax_amount', 'log_error', 'transaction_date', 'la_cnty', 'orange_cnty', 'ventura_cnty']
+    
+    
+    df.set_index('parcelid', inplace=True)
+    
+    df['log_error_class'] = pd.qcut(df.logerror, q=6, labels=['s1', 's2', 's3', 's4', 's5', 's6'])
     # Outliers
     # bathrooms, property_sqft, lot_sqft, struct_tax_value, tax_value, land_tax_value, tax_amount, and log_error
-    df = remove_outliers(df, 'tax_value', 3)
-    df = remove_outliers(df, 'lot_sqft', 3)
+    
+    
+#     df = remove_outliers(df, 'tax_value', 3)
+#     df = remove_outliers(df, 'lot_sqft', 3)
+#     df = remove_outliers(df, 'log_error', 1.5)
 
     
     return df
@@ -177,7 +189,7 @@ def wrangle_zillow():
 
 def tax_rate_distribution():
     '''
-This function creates the dataframe used to calculate the tax distribution rate per county. It takes in the cached zillow dataset, sets the parcelid as the index, makes the features list in order to limit the dataframe, renames the columns for clarity, drops null values, creates the tax_rate feature, and removed outliers from tax_rate and tx_value.
+This function creates the dataframe used to calculate the tax distribution rate per county. It takes in the cached zillow dataset, sets the parcelid as the index, makes the features list in order to limit the dataframe, renames the columns for clarity, drops null values, creates the tax_rate feature, and removed outliers from tax_rate and tax_value.
     '''
     df = get_zillow_data(cached=True)
     df.set_index('parcelid', inplace=True)

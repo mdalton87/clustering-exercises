@@ -87,11 +87,11 @@ def add_upper_outlier_columns(df, k):
 ### Univariate
 
 def explore_univariate(train, categorical_vars, quant_vars):
-    for var in categorical_vars:
-        explore_univariate_categorical(train, var)
+    for cat_var in categorical_vars:
+        explore_univariate_categorical(train, cat_var)
         print('_________________________________________________________________')
-    for col in quant_vars:
-        p, descriptive_stats = explore_univariate_quant(train, col)
+    for quant in quant_vars:
+        p, descriptive_stats = explore_univariate_quant(train, quant)
         plt.show(p)
         print(descriptive_stats)
 
@@ -107,22 +107,22 @@ def explore_univariate_categorical(train, cat_var):
     plt.show()
     print(frequency_table)
 
-def explore_univariate_quant(train, quant_var):
+def explore_univariate_quant(train, quant):
     '''
     takes in a dataframe and a quantitative variable and returns
     descriptive stats table, histogram, and boxplot of the distributions. 
     '''
-    descriptive_stats = train[quant_var].describe()
+    descriptive_stats = train[quant].describe()
     plt.figure(figsize=(8,2))
 
     p = plt.subplot(1, 2, 1)
-    p = plt.hist(train[quant_var], color='lightseagreen')
-    p = plt.title(quant_var)
+    p = plt.hist(train[quant], color='lightseagreen')
+    p = plt.title(quant)
 
     # second plot: box plot
     p = plt.subplot(1, 2, 2)
-    p = plt.boxplot(train[quant_var])
-    p = plt.title(quant_var)
+    p = plt.boxplot(train[quant])
+    p = plt.title(quant)
     return p, descriptive_stats
     
 def freq_table(train, cat_var):
@@ -151,7 +151,6 @@ def explore_bivariate(train, categorical_target, continuous_target, binary_vars,
     the categorical function takes in a binary independent variable and the quant function takes in a quantitative 
     independent variable. 
     '''
-    
     for binary in binary_vars:
         explore_bivariate_categorical(train, categorical_target, continuous_target, binary)
     for quant in quant_vars:
@@ -160,18 +159,20 @@ def explore_bivariate(train, categorical_target, continuous_target, binary_vars,
 ###################### ________________________________________
 ## Bivariate Categorical
 
-def explore_bivariate_categorical(train, categorical_target, continuous_target, binary_vars):
+def explore_bivariate_categorical(train, categorical_target, continuous_target, binary):
     '''
     takes in binary categorical variable and binned/categorical target variable, 
     returns a crosstab of frequencies
     runs a chi-square test for the proportions
     and creates a barplot, adding a horizontal line of the overall rate of the binary categorical variable. 
     '''
-    print(binary_vars, "\n_____________________\n")
-#     ct = pd.crosstab(train[binary_vars], train[categorical_target], margins=True)
-    chi2_summary, observed, expected = run_chi2(train, binary_vars, categorical_target)
-    mannwhitney = compare_means(train, continuous_target, binary_vars, alt_hyp='two-sided')
-    p = plot_cat_by_target(train, categorical_target, binary_vars)
+    print(binary, "\n_____________________\n")
+    
+    ct = pd.crosstab(train[binary], train[categorical_target], margins=True)
+    chi2_summary, observed, expected = run_chi2(train, binary, categorical_target)
+    mannwhitney = compare_means(train, continuous_target, binary, alt_hyp='two-sided')
+    p = plot_cat_by_target(train, categorical_target, binary)
+    
     print("\nMann Whitney Test Comparing Means: ", mannwhitney)
     print(chi2_summary)
 #     print("\nobserved:\n", ct)
@@ -181,8 +182,8 @@ def explore_bivariate_categorical(train, categorical_target, continuous_target, 
     
 
     
-def run_chi2(train, binary_vars, categorical_target):
-    observed = pd.crosstab(train[binary_vars], train[categorical_target])
+def run_chi2(train, binary, categorical_target):
+    observed = pd.crosstab(train[binary], train[categorical_target])
     chi2, p, degf, expected = stats.chi2_contingency(observed)
     chi2_summary = pd.DataFrame({'chi2': [chi2], 'p-value': [p], 
                                  'degrees of freedom': [degf]})
@@ -190,63 +191,63 @@ def run_chi2(train, binary_vars, categorical_target):
     return chi2_summary, observed, expected
 
 
-def plot_cat_by_target(train, categorical_target, binary_vars):
+def plot_cat_by_target(train, categorical_target, binary):
     p = plt.figure(figsize=(2,2))
-    p = sns.barplot(categorical_target, binary_vars, data=train, alpha=.8, color='lightseagreen')
-    overall_rate = train[binary_vars].mean()
+    p = sns.barplot(categorical_target, binary, data=train, alpha=.8, color='lightseagreen')
+    overall_rate = train[binary].mean()
     p = plt.axhline(overall_rate, ls='--', color='gray')
     return p
 
     
-def compare_means(train, continuous_target, binary_vars, alt_hyp='two-sided'):
-    x = train[train[binary_vars]==0][continuous_target]
-    y = train[train[binary_vars]==1][continuous_target]
+def compare_means(train, continuous_target, binary, alt_hyp='two-sided'):
+    x = train[train[binary]==0][continuous_target]
+    y = train[train[binary]==1][continuous_target]
     return stats.mannwhitneyu(x, y, use_continuity=True, alternative=alt_hyp)
 
 ###################### ________________________________________
 ## Bivariate Quant
 
-def explore_bivariate_quant(train, categorical_target, continuous_target, quant_var):
+def explore_bivariate_quant(train, categorical_target, continuous_target, quant):
     '''
     descriptive stats by each target class. 
     compare means across 2 target groups 
     boxenplot of target x quant
     swarmplot of target x quant
     '''
-    print(quant_var, "\n____________________\n")
-    descriptive_stats = train.groupby(categorical_target)[quant_var].describe().T
-    spearmans = compare_relationship(train, continuous_target, quant_var)
+    print(quant, "\n____________________\n")
+    descriptive_stats = train.groupby(categorical_target)[quant].describe().T
+    spearmans = compare_relationship(train, continuous_target, quant)
     plt.figure(figsize=(4,4))
-    boxen = plot_boxen(train, categorical_target, quant_var)
-    swarm = plot_swarm(train, categorical_target, quant_var)
+    boxen = plot_boxen(train, categorical_target, quant)
+#     swarm = plot_swarm(train, categorical_target, quant)
     plt.show()
-    scatter = plot_scatter(train, categorical_target, continuous_target, quant_var)
+    scatter = plot_scatter(train, categorical_target, continuous_target, quant)
     plt.show()
     print(descriptive_stats, "\n")
     print("\nSpearman's Correlation Test:\n", spearmans)
     print("\n____________________\n")
 
 
-def compare_relationship(train, continuous_target, quant_var):
-    return stats.spearmanr(train[quant_var], train[continuous_target], axis=0)
+def compare_relationship(train, continuous_target, quant):
+    return stats.spearmanr(train[quant], train[continuous_target], axis=0)
 
-def plot_swarm(train, categorical_target, quant_var):
-    average = train[quant_var].mean()
-    p = sns.swarmplot(data=train, x=categorical_target, y=quant_var, color='lightgray')
-    p = plt.title(quant_var)
+def plot_swarm(train, categorical_target, quant):
+    average = train[quant].mean()
+    p = sns.swarmplot(data=train, x=categorical_target, y=quant, color='lightgray')
+    p = plt.title(quant)
     p = plt.axhline(average, ls='--', color='black')
     return p
 
-def plot_boxen(train, categorical_target, quant_var):
-    average = train[quant_var].mean()
-    p = sns.boxenplot(data=train, x=categorical_target, y=quant_var, color='lightseagreen')
-    p = plt.title(quant_var)
+def plot_boxen(train, categorical_target, quant):
+    average = train[quant].mean()
+    p = sns.boxenplot(data=train, x=categorical_target, y=quant, color='lightseagreen')
+    p = plt.title(quant)
     p = plt.axhline(average, ls='--', color='black')
     return p
 
-def plot_scatter(train, categorical_target, continuous_target, quant_var):
-    p = sns.scatterplot(x=quant_var, y=continuous_target, hue=categorical_target, data=train)
-    p = plt.title(quant_var)
+def plot_scatter(train, categorical_target, continuous_target, quant):
+    p = sns.scatterplot(x=quant, y=continuous_target, hue=categorical_target, data=train)
+    p = plt.title(quant)
     return p
 
 
@@ -258,7 +259,7 @@ def plot_scatter(train, categorical_target, continuous_target, quant_var):
 def explore_multivariate(train, categorical_target, binary_vars, quant_vars):
     '''
     '''
-    plot_swarm_grid_with_color(train, categorical_target, binary_vars, quant_vars)
+#     plot_swarm_grid_with_color(train, categorical_target, binary_vars, quant_vars)
     violin = plot_violin_grid_with_color(train, categorical_target, binary_vars, quant_vars)
     plt.show()
     pair = sns.pairplot(data=train, vars=quant_vars, hue=categorical_target)
@@ -308,7 +309,44 @@ def pair_plot(df):
     return p
 
 def heat_map(df):
-    plt.figure(figsize=(8,6))
-    q = sns.heatmap(df.corr(), cmap='RdYlBu', annot=True, center=0)
+    plt.figure(figsize=(16,12))
+    q = sns.heatmap(df.corr(), cmap='BuGn', annot=True, center=0)
     return q
 
+
+
+def run_stats_on_everything(train, categorical_target, continuous_target, binary_vars, quant_vars):
+    
+    
+    
+    for binary in binary_vars:
+        
+        ct = pd.crosstab(train[binary], train[categorical_target], margins=True)
+        chi2_summary, observed, expected = run_chi2(train, binary, categorical_target)
+        mannwhitney = compare_means(train, continuous_target, binary, alt_hyp='two-sided')
+        
+        print(binary, "\n_____________________\n")
+        print("\nMann Whitney Test Comparing Means: ", mannwhitney)
+        print(chi2_summary)
+    #     print("\nobserved:\n", ct)
+        print("\nexpected:\n", expected)
+        print("\n_____________________\n")
+    
+    
+    plt.figure(figsize=(16,12))
+    sns.heatmap(train.corr(), cmap='BuGn')
+    plt.show()
+    
+    for quant in quant_vars:
+        
+
+
+        spearmans = compare_relationship(train, continuous_target, quant)
+        
+        print(quant, "\n____________________\n")
+        print("Spearman's Correlation Test:\n")
+        print(spearmans)
+        print("\n____________________")
+        print("____________________\n")
+        
+        
