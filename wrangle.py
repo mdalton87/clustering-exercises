@@ -143,7 +143,7 @@ def wrangle_zillow():
     # Removing column s and rows outside specifies threshhold
     df = handle_missing_values(df, 0.6, 0.75)
     # Drop a list of columns with too few 0 values, duplicate features, and vague values
-    dropcols = ['id', 'heatingorsystemtypeid', 'buildingqualitytypeid', 'propertyzoningdesc', 'heatingorsystemdesc', 'calculatedbathnbr', 'regionidzip', 'regionidcity', 'finishedsquarefeet12', 'fullbathcnt', 'censustractandblock', 'roomcnt']
+    dropcols = ['id', 'heatingorsystemtypeid', 'buildingqualitytypeid', 'propertyzoningdesc', 'heatingorsystemdesc', 'calculatedbathnbr', 'regionidzip', 'regionidcity', 'regionidcounty', 'finishedsquarefeet12', 'fullbathcnt', 'censustractandblock', 'roomcnt']
     df = df.drop(columns=dropcols)
     # Dropped null from the property value features
     df = df[df.taxvaluedollarcnt.notnull()]
@@ -163,9 +163,14 @@ def wrangle_zillow():
     # Dummy FiPs
     df = pd.get_dummies(df, columns=['fips'], drop_first=True)
     # clean up column names
-    df.columns = ['parcelid', 'bathrooms', 'bedrooms', 'property_sqft', 'latitude', 'longitude', 'lot_sqft', 'prop_cnty_land_code', 'prop_land_type_id', 'census_tract_and_block', 'region_id_county', 'unitcnt', 'year_built', 'struct_tax_value', 'tax_value', 'assessment_year', 'land_tax_value', 'tax_amount', 'log_error', 'transaction_date', 'orange_cnty', 'ventura_cnty']
+    df.columns = ['parcelid', 'bathrooms', 'bedrooms', 'property_sqft', 'fips', 'latitude', 'longitude', 'lot_sqft', 'prop_cnty_land_code', 'prop_land_type_id', 'census_tract_and_block', 'unitcnt', 'year_built', 'struct_tax_value', 'tax_value', 'assessment_year', 'land_tax_value', 'tax_amount', 'log_error', 'transaction_date'] #, 'orange_cnty', 'ventura_cnty']
     
     df['log_error_class'] = pd.qcut(df.log_error, q=4, labels=['s1', 's2', 's3', 's4'])
+    # Outliers
+    # bathrooms, property_sqft, lot_sqft, struct_tax_value, tax_value, land_tax_value, tax_amount, and log_error
+    df = remove_outliers(df, 'tax_value', 3)
+    df = remove_outliers(df, 'lot_sqft', 3)
+
     
     return df
 
@@ -290,7 +295,7 @@ def train_validate_test_split(df, target, seed=42):
 
 
 def scale_my_data(train, validate, test, quant_vars):
-    scaler = StandardScaler()
+    scaler = MinMaxScaler()
     scaler.fit(train[quant_vars])
     
     X_train_scaled = scaler.transform(train[quant_vars])

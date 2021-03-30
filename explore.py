@@ -87,7 +87,7 @@ def add_upper_outlier_columns(df, k):
 ### Univariate
 
 def explore_univariate(train, categorical_vars, quant_vars):
-    for var in cat_vars:
+    for var in categorical_vars:
         explore_univariate_categorical(train, var)
         print('_________________________________________________________________')
     for col in quant_vars:
@@ -160,29 +160,29 @@ def explore_bivariate(train, categorical_target, continuous_target, binary_vars,
 ###################### ________________________________________
 ## Bivariate Categorical
 
-def explore_bivariate_categorical(train, categorical_target, continuous_target, binary_var):
+def explore_bivariate_categorical(train, categorical_target, continuous_target, binary_vars):
     '''
     takes in binary categorical variable and binned/categorical target variable, 
     returns a crosstab of frequencies
     runs a chi-square test for the proportions
     and creates a barplot, adding a horizontal line of the overall rate of the binary categorical variable. 
     '''
-    print(binary_var, "\n_____________________\n")
-    ct = pd.crosstab(train[binary_var], train[categorical_target], margins=True)
-    chi2_summary, observed, expected = run_chi2(train, binary_var, categorical_target)
-    mannwhitney = compare_means(train, continuous_target, binary_var, alt_hyp='two-sided')
-    p = plot_cat_by_target(train, categorical_target, binary_var)
+    print(binary_vars, "\n_____________________\n")
+#     ct = pd.crosstab(train[binary_vars], train[categorical_target], margins=True)
+    chi2_summary, observed, expected = run_chi2(train, binary_vars, categorical_target)
+    mannwhitney = compare_means(train, continuous_target, binary_vars, alt_hyp='two-sided')
+    p = plot_cat_by_target(train, categorical_target, binary_vars)
     print("\nMann Whitney Test Comparing Means: ", mannwhitney)
     print(chi2_summary)
-    print("\nobserved:\n", ct)
+#     print("\nobserved:\n", ct)
     print("\nexpected:\n", expected)
     plt.show(p)
     print("\n_____________________\n")
     
 
     
-def run_chi2(train, binary_var, categorical_target):
-    observed = pd.crosstab(train[binary_var], train[categorical_target])
+def run_chi2(train, binary_vars, categorical_target):
+    observed = pd.crosstab(train[binary_vars], train[categorical_target])
     chi2, p, degf, expected = stats.chi2_contingency(observed)
     chi2_summary = pd.DataFrame({'chi2': [chi2], 'p-value': [p], 
                                  'degrees of freedom': [degf]})
@@ -190,17 +190,17 @@ def run_chi2(train, binary_var, categorical_target):
     return chi2_summary, observed, expected
 
 
-def plot_cat_by_target(train, categorical_target, binary_var):
+def plot_cat_by_target(train, categorical_target, binary_vars):
     p = plt.figure(figsize=(2,2))
-    p = sns.barplot(categorical_target, binary_var, data=train, alpha=.8, color='lightseagreen')
-    overall_rate = train[binary_var].mean()
+    p = sns.barplot(categorical_target, binary_vars, data=train, alpha=.8, color='lightseagreen')
+    overall_rate = train[binary_vars].mean()
     p = plt.axhline(overall_rate, ls='--', color='gray')
     return p
 
     
-def compare_means(train, continuous_target, binary_var, alt_hyp='two-sided'):
-    x = train[train[binary_var]==0][continuous_target]
-    y = train[train[binary_var]==1][continuous_target]
+def compare_means(train, continuous_target, binary_vars, alt_hyp='two-sided'):
+    x = train[train[binary_vars]==0][continuous_target]
+    y = train[train[binary_vars]==1][continuous_target]
     return stats.mannwhitneyu(x, y, use_continuity=True, alternative=alt_hyp)
 
 ###################### ________________________________________
@@ -255,11 +255,11 @@ def plot_scatter(train, categorical_target, continuous_target, quant_var):
 ### Multivariate
 
 
-def explore_multivariate(train, categorical_target, binary_var, quant_vars):
+def explore_multivariate(train, categorical_target, binary_vars, quant_vars):
     '''
     '''
-    plot_swarm_grid_with_color(train, categorical_target, binary_var, quant_vars)
-    violin = plot_violin_grid_with_color(train, categorical_target, binary_var, quant_vars)
+    plot_swarm_grid_with_color(train, categorical_target, binary_vars, quant_vars)
+    violin = plot_violin_grid_with_color(train, categorical_target, binary_vars, quant_vars)
     plt.show()
     pair = sns.pairplot(data=train, vars=quant_vars, hue=categorical_target)
     plt.show()
@@ -280,14 +280,14 @@ def plot_all_continuous_vars(train, categorical_target, quant_vars):
     p.set(yscale="log", xlabel='')    
     plt.show()
     
-def plot_violin_grid_with_color(train, categorical_target, binary_var, quant_vars):
+def plot_violin_grid_with_color(train, categorical_target, binary_vars, quant_vars):
     for quant in quant_vars:
-        sns.violinplot(x=categorical_target, y=quant, data=train, split=True, hue=binary_var, palette="Set2")
+        sns.violinplot(x=categorical_target, y=quant, data=train, split=True, hue=binary_vars, palette="Set2")
         plt.show()
         
-def plot_swarm_grid_with_color(train, categorical_target, binary_var, quant_vars):
+def plot_swarm_grid_with_color(train, categorical_target, binary_vars, quant_vars):
     for quant in quant_vars:
-        sns.swarmplot(x=categorical_target, y=quant, data=train, split=True, hue=binary_var, palette="Set2")
+        sns.swarmplot(x=categorical_target, y=quant, data=train, split=True, hue=binary_vars, palette="Set2")
         plt.show()
                 
 
