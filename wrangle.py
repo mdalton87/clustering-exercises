@@ -13,7 +13,7 @@ from sklearn.metrics import mean_squared_error, r2_score, explained_variance_sco
 from sklearn.linear_model import LinearRegression
 from sklearn.feature_selection import f_regression, RFE, SelectKBest
 import sklearn.preprocessing
-from sklearn.preprocessing import MinMaxScaler 
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 
 
@@ -160,8 +160,12 @@ def wrangle_zillow():
     # 0 values for beds and baths are useless.
     df = df[df.bedroomcnt != 0]
     df = df[df.bathroomcnt != 0]
+    # Dummy FiPs
+    df = pd.get_dummies(df, columns=['fips'], drop_first=True)
     # clean up column names
-    df.columns = ['parcelid', 'bathrooms', 'bedrooms', 'property_sqft', 'fips', 'latitude', 'longitude', 'lot_sqft', 'prop_cnty_land_code', 'prop_land_type_id', 'census_tract_and_block', 'region_id_county', 'unitcnt', 'year_built', 'struct_tax_value', 'tax_value', 'assessment_year', 'land_tax_value', 'tax_amount', 'log_error', 'transaction_date']
+    df.columns = ['parcelid', 'bathrooms', 'bedrooms', 'property_sqft', 'latitude', 'longitude', 'lot_sqft', 'prop_cnty_land_code', 'prop_land_type_id', 'census_tract_and_block', 'region_id_county', 'unitcnt', 'year_built', 'struct_tax_value', 'tax_value', 'assessment_year', 'land_tax_value', 'tax_amount', 'log_error', 'transaction_date', 'orange_cnty', 'ventura_cnty']
+    
+    df['log_error_class'] = pd.qcut(df.log_error, q=4, labels=['s1', 's2', 's3', 's4'])
     
     return df
 
@@ -191,7 +195,7 @@ This function creates the dataframe used to calculate the tax distribution rate 
 
 def wrangle_mall():
     df = get_mall_data(cached=True)
-    df = remove_outliers(df, 'annual_income', 1.5)
+    df = ex.add_upper_outlier_columns(df, 1.5)
     df = pd.get_dummies(df, columns=['gender'], drop_first=True)
 
     train, validate, test, X_train, y_train, X_validate, y_validate, X_test, y_test = train_validate_test_split(df, 'annual_income', 42)
@@ -264,37 +268,40 @@ def impute_mode(df, col, strategy):
     return train, validate, test
 
 
-def train_validate_test_split(df, target, seed):
+def train_validate_test_split(df, target, seed=42):
     '''
-    this function takes in a dataframe and splits it into 3 samples, 
-    a test, which is 20% of the entire dataframe, 
-    a validate, which is 24% of the entire dataframe,
-    and a train, which is 56% of the entire dataframe. 
-    It then splits each of the 3 samples into a dataframe with independent variables
-    and a series with the dependent, or target variable. 
-    The function returns 3 dataframes and 3 series:
-    X_train (df) & y_train (series), X_validate & y_validate, X_test & y_test. 
+    This function takes in a dataframe, the name of the target variable
+    (for stratification purposes), and an integer for a setting a seed
+    and splits the data into train, validate and test. 
+    Test is 20% of the original dataset, validate is .30*.80= 24% of the 
+    original dataset, and train is .70*.80= 56% of the original dataset. 
+    The function returns, in this order, train, validate and test dataframes. 
+    '''
+    train_validate, test = train_test_split(df, test_size=0.2, 
+                                            random_state=seed, 
+                                            # stratify=df[target]
+                                           )
+    train, validate = train_test_split(train_validate, test_size=0.3, 
+                                       random_state=seed,
+                                       # stratify=train_validate[target]
+                                      )
+    return train, validate, test
 
-    '''
-    # Train, Validate, and test
-    train_and_validate, test = train_test_split(
-        df, test_size=0.2, random_state=seed)
-    train, validate = train_test_split(
-        train_and_validate,
-        test_size=0.3,
-        random_state=seed)
+
+
+def scale_my_data(train, validate, test, quant_vars):
+    scaler = StandardScaler()
+    scaler.fit(train[quant_vars])
     
-    # Split
-    X_train = train.drop(columns=[target])
-    y_train = train[target]
-    
-    X_validate = validate.drop(columns=[target])
-    y_validate = validate[target]
-    
-    X_test = test.drop(columns=[target])
-    y_test = test[target]
-    
-    return train, validate, test, X_train, y_train, X_validate, y_validate, X_test, y_test
+    X_train_scaled = scaler.transform(train[quant_vars])
+    X_validate_scaled = scaler.transform(validate[quant_vars])
+    X_test_scaled = scaler.transform(test[quant_vars])
+
+    train[quant_vars] = X_train_scaled
+    validate[quant_vars] = X_validate_scaled
+    test[quant_vars] = X_test_scaled
+    return train, validate, test
+
 
 
 def prep_zillow_data():
