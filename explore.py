@@ -7,45 +7,60 @@ from scipy import stats
 
 
 
-def missing_zero_values_table(df):
-    '''
-    This function tales in a dataframe and counts number of Zero values and NULL values. Returns a Table with counts and percentages of each value type.
-    '''
-    zero_val = (df == 0.00).astype(int).sum(axis=0)
-    mis_val = df.isnull().sum()
-    mis_val_percent = 100 * df.isnull().sum() / len(df)
-    mz_table = pd.concat([zero_val, mis_val, mis_val_percent], axis=1)
-    mz_table = mz_table.rename(
-    columns = {0 : 'Zero Values', 1 : 'NULL Values', 2 : '% of Total NULL Values'})
-    mz_table['Total Zero\'s plus NULL Values'] = mz_table['Zero Values'] + mz_table['NULL Values']
-    mz_table['% Total Zero\'s plus NULL Values'] = 100 * mz_table['Total Zero\'s plus NULL Values'] / len(df)
-    mz_table['Data Type'] = df.dtypes
-    mz_table = mz_table[
-        mz_table.iloc[:,1] >= 0].sort_values(
-    '% of Total NULL Values', ascending=False).round(1)
-    print ("Your selected dataframe has " + str(df.shape[1]) + " columns and " + str(df.shape[0]) + " Rows.\n"      
-        "There are " + str((mz_table['NULL Values'] != 0).sum()) +
-          " columns that have NULL values.")
-    #       mz_table.to_excel('D:/sampledata/missing_and_zero_values.xlsx', freeze_panes=(1,0), index = False)
-    return mz_table
+##########################################################################################
+
+# Feature selection and engineering
+
+##########################################################################################
 
 
-def missing_columns(df):
+def select_kbest(x, y, k):
     '''
-    This function takes a dataframe, counts the number of null values in each row, and converts the information into another dataframe. Adds percent of total columns.
+    This function takes in a dataframe, a target, and a number that is <= total number of features. The dataframe is split and scaled, the features are separated into objects and numberical columns, Finally the Select KBest test is run and returned.
+    Parameters:
+        x = dataframe
+        y = target,
+        k = # features to return
     '''
-    missing_cols_df = pd.Series(data=df.isnull().sum(axis = 1).value_counts().sort_index(ascending=False))
-    missing_cols_df = pd.DataFrame(missing_cols_df)
-    missing_cols_df = missing_cols_df.reset_index()
-    missing_cols_df.columns = ['total_missing_cols','num_rows']
-    missing_cols_df['percent_cols_missing'] = round(100 * missing_cols_df.total_missing_cols / df.shape[1], 2)
-    missing_cols_df['percent_rows_affected'] = round(100 * missing_cols_df.num_rows / df.shape[0], 2)
+    X_train, y_train, X_validate, y_validate, X_test, y_test = train_validate_test(x, y)
+    object_cols = get_object_cols(x)
+    numeric_cols = get_numeric_X_cols(X_train, object_cols)
+    X_train_scaled, X_validate_scaled, X_test_scaled = min_max_scale(X_train, X_validate, X_test, numeric_cols)
     
-    return missing_cols_df
+    f_selector = SelectKBest(f_regression, k)
+    f_selector.fit(X_train_scaled, y_train)
+    feature_mask = f_selector.get_support()
+    f_feature = X_train_scaled.iloc[:,feature_mask].columns.tolist()
+    return f_feature
 
 
+def rfe(x, y, k):
+    '''
+    This function takes in a dataframe, a target, and a number that is <= total number of features. The dataframe is split and scaled, the features are separated into objects and numberical columns, Finally the RFE test is run and returned.
+    Parameters:
+    x = dataframe
+    y = target,
+    k = # features to return
+    '''
+    X_train, y_train, X_validate, y_validate, X_test, y_test = train_validate_test(x, y)
+    object_cols = get_object_cols(x)
+    numeric_cols = get_numeric_X_cols(X_train, object_cols)
+    X_train_scaled, X_validate_scaled, X_test_scaled = min_max_scale(X_train, X_validate, X_test, numeric_cols)
+    
+    lm = LinearRegression()
+    rfe = RFE(lm, k)
+    rfe.fit(X_train_scaled,y_train)
+    feature_mask = rfe.support_
+    rfe_feature = X_train_scaled.iloc[:,feature_mask].columns.tolist()
+    return rfe_feature
+
+
+##########################################################################################
 
 # Outlier Identification 
+
+##########################################################################################
+
 
 
 def get_upper_outliers(s, k):
@@ -78,9 +93,11 @@ def add_upper_outlier_columns(df, k):
     return df
 
 
+##########################################################################################
 
 # Visualiation Exploration
 
+##########################################################################################
 
 
 ###################### ________________________________________
@@ -313,7 +330,11 @@ def heat_map(df):
     q = sns.heatmap(df.corr(), cmap='BuGn', annot=True, center=0)
     return q
 
+##########################################################################################
 
+# Stats
+
+##########################################################################################
 
 def run_stats_on_everything(train, categorical_target, continuous_target, binary_vars, quant_vars):
     

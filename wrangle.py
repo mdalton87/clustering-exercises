@@ -15,9 +15,11 @@ from sklearn.feature_selection import f_regression, RFE, SelectKBest
 import sklearn.preprocessing
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
-
+##########################################################################################
 
 # Aquire Data
+
+##########################################################################################
 
 def get_connection(db, user=user, host=host, password=password):
     '''
@@ -26,7 +28,11 @@ def get_connection(db, user=user, host=host, password=password):
     '''
     return f'mysql+pymysql://{user}:{password}@{host}/{db}'    
        
-    # Zillow Database        
+
+        
+##########################################################################################
+        
+###### Zillow Database        
         
 def new_zillow_data():
     '''
@@ -78,9 +84,9 @@ def get_zillow_data(cached=False):
         
     return df
 
+##########################################################################################
 
-
-# Mall_customers
+###### mall_customers Database        
 
 def new_mall_data():
     '''
@@ -115,98 +121,127 @@ def get_mall_data(cached=False):
         
     return df
 
-
+##########################################################################################
 
 # Wrangle Zillow Data
 
+##########################################################################################
 
-def wrangle_zillow():
+def wrangle_zillow(cached=False):
     '''
     This functions creates a dataframe from the zillow dataset and returns a cleaned and imputed version of the dataframe.
-    '''
-    # Takes in data from Codeup SQL server
-    df = get_zillow_data(cached=True)
-    # Remove rows with nulls in lat and long
-    df = df[df.latitude.notnull()]
-    df = df[df.longitude.notnull()]
-    # Isolated Single Unit Properties
-    df.propertylandusetypeid = df.propertylandusetypeid.astype(int)
-    x='propertylandusetypeid'
-    df = df[df[x] != 31]
-    df = df[df[x] != 246]
-    df = df[df[x] != 247]
-    df = df[df[x] != 248]
-    df = df[df[x] != 269]
-    # Imputed mode in the feature unitcnt
-    df.unitcnt.fillna(1, inplace=True)
-    df = df[df.unitcnt == 1]
-    # Removing column s and rows outside specifies threshhold
-    df = handle_missing_values(df, 0.6, 0.75)
-    # Drop a list of columns with too few 0 values, duplicate features, and vague values
+    ''' 
+    if cached == False:
+        
+        # Takes in data from Codeup SQL server
+        df = get_zillow_data(cached=True)
+        
+        # Remove rows with nulls in lat and long
+        df = df[df.latitude.notnull()]
+        df = df[df.longitude.notnull()]
+        
+        # Isolated Single Unit Properties
+        df.propertylandusetypeid = df.propertylandusetypeid.astype(int)
+        x = 'propertylandusetypeid'
+        df = df[df[x] != 246]
+        df = df[df[x] != 247]
+        df = df[df[x] != 248]
+        df = df[df[x] != 269]
+        
+          # If "fireplaceflag" is "True" and "fireplacecnt" is "NaN", we will set "fireplacecnt" equal to the median value of "1".
+        df.loc[(df['fireplaceflag'] == True) & (df['fireplacecnt'].isnull()), ['fireplacecnt']] = 1
+        # If 'fireplacecnt' is "NaN", replace with "0"
+        df.fireplacecnt.fillna(0,inplace = True)
+        # If "fireplacecnt" is 1 or larger "fireplaceflag" is "NaN", we will set "fireplaceflag" to "True".
+        df.loc[(df['fireplacecnt'] >= 1.0) & (df['fireplaceflag'].isnull()), ['fireplaceflag']] = True
+        df.fireplaceflag.fillna(0,inplace = True)
+        # Convert "True" to 1
+        df.fireplaceflag.replace(to_replace = True, value = 1,inplace = True)
+        
+        # NULLs in poolcnt = No pools
+        df.poolcnt.fillna(0, inplace=True)
+        
+        # Removing column s and rows outside specifies threshhold
+        df = handle_missing_values(df, 0.6, 0.75)
+        
+        # Fill unitcnt NULLs with the mode (1.0) and delete the rest.
+        df.unitcnt.fillna(1, inplace=True)
+        df = df[df.unitcnt == 1.0]
+        
+        # Dropped null from the property value features
+        df = df[df.taxvaluedollarcnt.notnull()]
+        df = df[df.structuretaxvaluedollarcnt.notnull()]
+        df = df[df.taxamount.notnull()]
+        df = df[df.calculatedfinishedsquarefeet.notnull()]
+        
+        # Fill in beds and baths nulls with median because the range of values is small
+        df['bedroomcnt'].replace(to_replace=0, value=df.bedroomcnt.median(), inplace=True)
+        df['bathroomcnt'].replace(to_replace=0, value=df.bathroomcnt.median(), inplace=True)
     
+        # Convert to int and replace NULLs with mode for 'heatingorsystemdesc','heatingorsystemtypeid
+        df['heatingorsystemtypeid'].fillna(2, inplace=True)
+        df['heatingorsystemdesc'].fillna('Central', inplace=True)
+        df.heatingorsystemtypeid = df.heatingorsystemtypeid.astype(int)
+        
+         # Convert latitude and longitude to positonal data points using lambda funtion (i.e. putting a decimal in the correct place)
+        df['latitude'] = df['latitude'].apply(lambda x: x / 10 ** (len((str(x))) - 2))
+        df['longitude'] = df['longitude'].apply(lambda x: x / 10 ** (len((str(x))) - 4))
+        
+        # Impute kNN, for lotsizesquarefeet and regionidcity using 'latitude', 'longitude', 'fips', 'calculatedfinishedsquarefeet' and 'taxvaluedollarcnt' with 5 neighbors
+        features = ['lotsizesquarefeet', 'latitude', 'longitude', 'fips', 'calculatedfinishedsquarefeet', 'taxvaluedollarcnt']
+        df = impute_knn(df, features, 5)
+        df.lotsizesquarefeet = df.lotsizesquarefeet.astype(int)
+        
+        features = ['regionidcity', 'fips', 'latitude', 'longitude']
+        df = impute_knn(df, features, 2)
+        df.regionidcity = df.regionidcity.astype(int)
+        
+        # changed fips to an int
+        df.fips = df.fips.astype(int)
+        
+        # Dummy FiPs
+        dummy_df =  pd.get_dummies(df['fips'])
+        dummy_df.columns = ['la_cnty', 'orange_cnty', 'ventura_cnty']
+        df = pd.concat([df, dummy_df], axis=1)    # clean up column names
+        
+        # list of columns not being used
+        dropcols = ['id', 'buildingqualitytypeid', 'finishedsquarefeet12', 'calculatedbathnbr', 'fullbathcnt', 'propertycountylandusecode', 'propertylandusetypeid', 'propertyzoningdesc', 'censustractandblock', 'rawcensustractandblock', 'regionidcounty', 'regionidzip', 'roomcnt', 'unitcnt', 'assessmentyear', 'transactiondate']
+        df = df.drop(columns=dropcols)
     
-#     dropcols = ['id', 'heatingorsystemtypeid', 'buildingqualitytypeid', 'propertyzoningdesc', 'heatingorsystemdesc', 'calculatedbathnbr', 'unitcnt', 'regionidzip', 'regddionidcity', 'regionidcounty', 'finishedsquarefeet12', 'fullbathcnt', 'censustractandblock', 'assessmentyear', 'roomcnt']
-#     df = df.drop(columns=dropcols)
+        # create categorical log error column into 5 sections
+        df['log_error_class'] = pd.qcut(df.logerror, q=5, labels=['l1', 'l2', 'l3', 'l4', 'l5'])
+        
+        # rename columns
+        df.columns = ['heating_system_type_id', 'parcelid', 'bathrooms', 'bedrooms', 'prop_sqft', 'fips', 'fireplace_cnt', 'latitude', 'longitude', 'lot_sqft', 'pool_cnt', 'region_id_city', 'year_built', 'fireplace_flag', 'struct_tax_value', 'tax_value', 'land_tax_value', 'tax_amount', 'log_error', 'heating_system_desc', 'la_cnty', 'orange_cnty', 'ventura_cnty', 'log_error_class']
+        
+        # Set index
+        df.set_index('parcelid', inplace=True)
+        
+        # drop the last of the null values
+        df = df.dropna()
+        
+        # Outliers
+    
+#         df = remove_outliers(df, 'tax_value', 3)
+#         df = remove_outliers(df, 'lot_sqft', 3)
+#         df = remove_outliers(df, 'log_error', 1.5)
+        
+    else: 
+        
+        # pull cached data
+        df = pd.read_csv('wrangled_zillow.csv', index_col=0)
+        
 
-
-    # Dropped null from the property value features
-    df = df[df.taxvaluedollarcnt.notnull()]
-    df = df[df.structuretaxvaluedollarcnt.notnull()]
-    df = df[df.taxamount.notnull()]
-    df = df[df.calculatedfinishedsquarefeet.notnull()]
-    # changed fips to an int
-    df.fips = df.fips.astype(int)
-    # Used kNN Imputer to fill in yearbuilt and lotsizesquarefeet
-    features1 = ['yearbuilt','latitude','longitude','fips']
-    df = impute_knn(df, features1, 4)
-    features2 = ['lotsizesquarefeet','latitude','longitude','fips','calculatedfinishedsquarefeet']
-    df = impute_knn(df, features2, 4)
-    # 0 values for beds and baths are useless.
-    df = df[df.bedroomcnt != 0]
-    df = df[df.bathroomcnt != 0]
-    # Dummy FiPs
-    dummy_df =  pd.get_dummies(df['fips'])
-    dummy_df.columns = ['la_cnty', 'orange_cnty', 'ventura_cnty']
-    df = pd.concat([df, dummy_df], axis=1)    # clean up column names
-    
-#     df.columns = ['parcelid', 'bathrooms', 'bedrooms', 'property_sqft', 'fips', 'latitude', 'longitude', 'lot_sqft', 'prop_cnty_land_code', 'prop_land_type_id', 'census_data', 'year_built', 'struct_tax_value', 'tax_value', 'land_tax_value', 'tax_amount', 'log_error', 'transaction_date', 'la_cnty', 'orange_cnty', 'ventura_cnty']
-    
-    
-    df.set_index('parcelid', inplace=True)
-    
-    df['log_error_class'] = pd.qcut(df.logerror, q=6, labels=['s1', 's2', 's3', 's4', 's5', 's6'])
-    # Outliers
-    # bathrooms, property_sqft, lot_sqft, struct_tax_value, tax_value, land_tax_value, tax_amount, and log_error
-    
-    
-#     df = remove_outliers(df, 'tax_value', 3)
-#     df = remove_outliers(df, 'lot_sqft', 3)
-#     df = remove_outliers(df, 'log_error', 1.5)
-
-    
     return df
 
 
-def tax_rate_distribution():
-    '''
-This function creates the dataframe used to calculate the tax distribution rate per county. It takes in the cached zillow dataset, sets the parcelid as the index, makes the features list in order to limit the dataframe, renames the columns for clarity, drops null values, creates the tax_rate feature, and removed outliers from tax_rate and tax_value.
-    '''
-    df = get_zillow_data(cached=True)
-    df.set_index('parcelid', inplace=True)
-    features = ['fips', 'taxvaluedollarcnt', 'taxamount']
-    df = df[features]
-    
-    df.columns = ['fips', 'tax_value', 'tax_amount']
-    
-    df = df.dropna()
-    
-    df['tax_rate'] = (df.tax_amount / df.tax_value)
-    
-    df = remove_outliers(df, 'tax_rate', 2.5)
-    df = remove_outliers(df, 'tax_value', 2.5)
-    
-    return df
 
+
+##########################################################################################
+
+###### Wrangle Mall
+
+##########################################################################################
 
 # Wrangle Mall_customers
 
@@ -214,24 +249,70 @@ def wrangle_mall():
     df = get_mall_data(cached=True)
     df = ex.add_upper_outlier_columns(df, 1.5)
     df = pd.get_dummies(df, columns=['gender'], drop_first=True)
+    quant_vars = ['annual_income','spending_score']
+    train, validate, test = train_validate_test_split(df, 'annual_income', 42)
+    train, validate, test = scale_my_data(train, validate, test, quant_vars)
+    df = df.drop(columns=['customer_id_outliers'])
+    return train, validate, test
 
-    train, validate, test, X_train, y_train, X_validate, y_validate, X_test, y_test = train_validate_test_split(df, 'annual_income', 42)
 
+##########################################################################################
+
+# Zero's and NULLs
+
+##########################################################################################
+
+
+
+#####################__________________________________
+# Identifying Zeros and Nulls in columns and rows
+
+def missing_zero_values_table(df):
+    '''
+    This function tales in a dataframe and counts number of Zero values and NULL values. Returns a Table with counts and percentages of each value type.
+    '''
+    zero_val = (df == 0.00).astype(int).sum(axis=0)
+    mis_val = df.isnull().sum()
+    mis_val_percent = 100 * df.isnull().sum() / len(df)
+    mz_table = pd.concat([zero_val, mis_val, mis_val_percent], axis=1)
+    mz_table = mz_table.rename(
+    columns = {0 : 'Zero Values', 1 : 'NULL Values', 2 : '% of Total NULL Values'})
+    mz_table['Total Zero\'s plus NULL Values'] = mz_table['Zero Values'] + mz_table['NULL Values']
+    mz_table['% Total Zero\'s plus NULL Values'] = 100 * mz_table['Total Zero\'s plus NULL Values'] / len(df)
+    mz_table['Data Type'] = df.dtypes
+    mz_table = mz_table[
+        mz_table.iloc[:,1] >= 0].sort_values(
+    '% of Total NULL Values', ascending=False).round(1)
+    print ("Your selected dataframe has " + str(df.shape[1]) + " columns and " + str(df.shape[0]) + " Rows.\n"      
+        "There are " + str((mz_table['NULL Values'] != 0).sum()) +
+          " columns that have NULL values.")
+    #       mz_table.to_excel('D:/sampledata/missing_and_zero_values.xlsx', freeze_panes=(1,0), index = False)
+    return mz_table
+
+
+
+def missing_columns(df):
+    '''
+    This function takes a dataframe, counts the number of null values in each row, and converts the information into another dataframe. Adds percent of total columns.
+    '''
+    missing_cols_df = pd.Series(data=df.isnull().sum(axis = 1).value_counts().sort_index(ascending=False))
+    missing_cols_df = pd.DataFrame(missing_cols_df)
+    missing_cols_df = missing_cols_df.reset_index()
+    missing_cols_df.columns = ['total_missing_cols','num_rows']
+    missing_cols_df['percent_cols_missing'] = round(100 * missing_cols_df.total_missing_cols / df.shape[1], 2)
+    missing_cols_df['percent_rows_affected'] = round(100 * missing_cols_df.num_rows / df.shape[0], 2)
     
-    object_cols = get_object_cols(X_train)
-    numeric_cols = get_numeric_X_cols(X_train, object_cols)
-    X_train_scaled, X_validate_scaled, X_test_scaled = min_max_scale(X_train, X_validate, X_test, numeric_cols)
-    
-    return train, validate, test, X_train, y_train, X_validate, y_validate, X_test, y_test, X_train_scaled, X_validate_scaled, X_test_scaled
+    return missing_cols_df
 
-# Prepare Everything
+
+#####################__________________________________
+# Do things to the above zeros and nulls ^^
 
 def handle_missing_values(df, prop_to_drop_col, prop_to_drop_row):
     '''
     This function takes in a dataframe, 
     a number between 0 and 1 that represents the proportion, for each column, of rows with non-missing values required to keep the column, 
-    a another number between 0 and 1 that represents the proportion, for each row, of columns/variables with non-missing values required to keep the row, 
-    and returns the dataframe with the columns and rows dropped as indicated.
+    a another number between 0 and 1 that represents the proportion, for each row, of columns/variables with non-missing values required to keep the row, and returns the dataframe with the columns and rows dropped as indicated.
     '''
     # drop cols > thresh, axis = 1 == cols
     df = df.dropna(axis=1, thresh = prop_to_drop_col * df.shape[0])
@@ -240,9 +321,30 @@ def handle_missing_values(df, prop_to_drop_col, prop_to_drop_row):
     return df
 
 
+
+# def impute_mode(df, col, strategy):
+#     '''
+#     impute mode for column as str
+#     '''
+#     train, validate, test = train_validate_test_split(df, seed=42)
+#     imputer = SimpleImputer(strategy=strategy)
+#     train[[col]] = imputer.fit_transform(train[[col]])
+#     validate[[col]] = imputer.transform(validate[[col]])
+#     test[[col]] = imputer.transform(test[[col]])
+#     return train, validate, test
+
+def impute_mode(df, cols):
+    ''' 
+    Imputes column mode for all missing data
+    '''
+    for col in cols:
+        df = df.fillna(df[col].value_counts().index[0])
+        return df
+
+
 def impute_knn(df, list_of_features, knn):
     '''
-    This function performs a kNN impute on a dataframe and returns an imputed df.
+    This function performs a kNN impute on a single column and returns an imputed df.
     Parameters: df: dataframee
     list_of_features: a List of features, place the feature intended for impute first, then supporting features after.
     knn: an integer, indicates number of neighbors to find prior to selecting imputed value.
@@ -254,6 +356,9 @@ def impute_knn(df, list_of_features, knn):
     df[list_of_features[0]] = imputed[[0]]
     return df
 
+
+#####################__________________________________
+# Removing outliers
 
 
 def remove_outliers(df, col, multiplier):
@@ -270,21 +375,20 @@ def remove_outliers(df, col, multiplier):
     return df
 
 
+##########################################################################################
 
 # Split Data
 
-def impute_mode(df, col, strategy):
-    '''
-    impute mode for column as str
-    '''
-    train, validate, test = train_validate_test_split(df, seed=42)
-    imputer = SimpleImputer(strategy=strategy)
-    train[[col]] = imputer.fit_transform(train[[col]])
-    validate[[col]] = imputer.transform(validate[[col]])
-    test[[col]] = imputer.transform(test[[col]])
-    return train, validate, test
+##########################################################################################
 
 
+
+####### PICK ONE OF THE METHODS OF SPLITTING DATA BELOW, NOT BOTH
+
+
+
+# 1.)
+#----------------------------------------------------------------------------------------#
 def train_validate_test_split(df, target, seed=42):
     '''
     This function takes in a dataframe, the name of the target variable
@@ -318,63 +422,43 @@ def scale_my_data(train, validate, test, quant_vars):
     validate[quant_vars] = X_validate_scaled
     test[quant_vars] = X_test_scaled
     return train, validate, test
-
-
-
-def prep_zillow_data():
-    df = wrangle_zillow()
-    train_validate, test = train_test_split(df, test_size=.2, random_state=42)
-    train, validate = train_test_split(train_validate, 
-                                       test_size=.3, 
-                                       random_state=42)
-    train, validate, test = impute_mode()
-    return train, validate, test
+#----------------------------------------------------------------------------------------#
 
 
 
 
-# Feature engineering
-
-def select_kbest(x, y, k):
+# 2.)
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++#
+def train_validate_test(df, target):
     '''
-    This function takes in a dataframe, a target, and a number that is <= total number of features. The dataframe is split and scaled, the features are separated into objects and numberical columns, Finally the Select KBest test is run and returned.
-    Parameters:
-        x = dataframe
-        y = target,
-        k = # features to return
+    this function takes in a dataframe and splits it into 3 samples, 
+    a test, which is 20% of the entire dataframe, 
+    a validate, which is 24% of the entire dataframe,
+    and a train, which is 56% of the entire dataframe. 
+    It then splits each of the 3 samples into a dataframe with independent variables
+    and a series with the dependent, or target variable. 
+    The function returns 3 dataframes and 3 series:
+    X_train (df) & y_train (series), X_validate & y_validate, X_test & y_test. 
     '''
-    X_train, y_train, X_validate, y_validate, X_test, y_test = train_validate_test(x, y)
-    object_cols = get_object_cols(x)
-    numeric_cols = get_numeric_X_cols(X_train, object_cols)
-    X_train_scaled, X_validate_scaled, X_test_scaled = min_max_scale(X_train, X_validate, X_test, numeric_cols)
+    # split df into test (20%) and train_validate (80%)
+    train_validate, test = train_test_split(df, test_size=.2, random_state=123)
+
+    # split train_validate off into train (70% of 80% = 56%) and validate (30% of 80% = 24%)
+    train, validate = train_test_split(train_validate, test_size=.3, random_state=123)
+
+    # split train into X (dataframe, drop target) & y (series, keep target only)
+    X_train = train.drop(columns=[target])
+    y_train = train[target]
     
-    f_selector = SelectKBest(f_regression, k)
-    f_selector.fit(X_train_scaled, y_train)
-    feature_mask = f_selector.get_support()
-    f_feature = X_train_scaled.iloc[:,feature_mask].columns.tolist()
-    return f_feature
-
-
-def rfe(x, y, k):
-    '''
-    This function takes in a dataframe, a target, and a number that is <= total number of features. The dataframe is split and scaled, the features are separated into objects and numberical columns, Finally the RFE test is run and returned.
-    Parameters:
-    x = dataframe
-    y = target,
-    k = # features to return
-    '''
-    X_train, y_train, X_validate, y_validate, X_test, y_test = train_validate_test(x, y)
-    object_cols = get_object_cols(x)
-    numeric_cols = get_numeric_X_cols(X_train, object_cols)
-    X_train_scaled, X_validate_scaled, X_test_scaled = min_max_scale(X_train, X_validate, X_test, numeric_cols)
+    # split validate into X (dataframe, drop target) & y (series, keep target only)
+    X_validate = validate.drop(columns=[target])
+    y_validate = validate[target]
     
-    lm = LinearRegression()
-    rfe = RFE(lm, k)
-    rfe.fit(X_train_scaled,y_train)
-    feature_mask = rfe.support_
-    rfe_feature = X_train_scaled.iloc[:,feature_mask].columns.tolist()
-    return rfe_feature
-
+    # split test into X (dataframe, drop target) & y (series, keep target only)
+    X_test = test.drop(columns=[target])
+    y_test = test[target]
+    
+    return X_train, y_train, X_validate, y_validate, X_test, y_test
 
 
 
@@ -385,13 +469,11 @@ def get_object_cols(df):
     '''
     # create a mask of columns whether they are object type or not
     mask = np.array(df.dtypes == "object")
-
         
     # get a list of the column names that are objects (from the mask)
     object_cols = df.iloc[:, mask].columns.tolist()
     
     return object_cols
-
 
 
 
@@ -430,14 +512,13 @@ def min_max_scale(X_train, X_validate, X_test, numeric_cols):
     X_train_scaled = pd.DataFrame(X_train_scaled_array, 
                                   columns=numeric_cols).\
                                   set_index([X_train.index.values])
-
     X_validate_scaled = pd.DataFrame(X_validate_scaled_array, 
                                      columns=numeric_cols).\
                                      set_index([X_validate.index.values])
-
     X_test_scaled = pd.DataFrame(X_test_scaled_array, 
                                  columns=numeric_cols).\
                                  set_index([X_test.index.values])
 
     
     return X_train_scaled, X_validate_scaled, X_test_scaled
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++#
