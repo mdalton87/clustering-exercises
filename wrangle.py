@@ -30,7 +30,7 @@ def get_connection(db, user=user, host=host, password=password):
        
 
         
-##########################################################################################
+#----------------------------------------------------------------------------------------#
         
 ###### Zillow Database        
         
@@ -84,7 +84,7 @@ def get_zillow_data(cached=False):
         
     return df
 
-##########################################################################################
+#----------------------------------------------------------------------------------------#
 
 ###### mall_customers Database        
 
@@ -131,7 +131,7 @@ def wrangle_zillow(cached=False):
     '''
     This functions creates a dataframe from the zillow dataset and returns a cleaned and imputed version of the dataframe.
     ''' 
-    if cached == False:
+    if cached or os.path.isfile('wrangle_zillow.csv') == False:
         
         # Takes in data from Codeup SQL server
         df = get_zillow_data(cached=True)
@@ -209,7 +209,7 @@ def wrangle_zillow(cached=False):
         df = df.drop(columns=dropcols)
     
         # create categorical log error column into 5 sections
-        df['log_error_class'] = pd.qcut(df.logerror, q=5, labels=['l1', 'l2', 'l3', 'l4', 'l5'])
+        df['log_error_class'] = pd.qcut(df.logerror, q=4, labels=['l1', 'l2', 'l3', 'l4'])
         
         # rename columns
         df.columns = ['heating_system_type_id', 'parcelid', 'bathrooms', 'bedrooms', 'prop_sqft', 'fips', 'fireplace_cnt', 'latitude', 'longitude', 'lot_sqft', 'pool_cnt', 'region_id_city', 'year_built', 'fireplace_flag', 'struct_tax_value', 'tax_value', 'land_tax_value', 'tax_amount', 'log_error', 'heating_system_desc', 'la_cnty', 'orange_cnty', 'ventura_cnty', 'log_error_class']
@@ -220,12 +220,15 @@ def wrangle_zillow(cached=False):
         # drop the last of the null values
         df = df.dropna()
         
+        
         # Outliers
     
 #         df = remove_outliers(df, 'tax_value', 3)
 #         df = remove_outliers(df, 'lot_sqft', 3)
 #         df = remove_outliers(df, 'log_error', 1.5)
         
+        df.to_csv('wrangled_zillow.csv')
+    
     else: 
         
         # pull cached data
@@ -264,8 +267,8 @@ def wrangle_mall():
 
 
 
-#####################__________________________________
-# Identifying Zeros and Nulls in columns and rows
+#----------------------------------------------------------------------------------------#
+###### Identifying Zeros and Nulls in columns and rows
 
 def missing_zero_values_table(df):
     '''
@@ -305,8 +308,8 @@ def missing_columns(df):
     return missing_cols_df
 
 
-#####################__________________________________
-# Do things to the above zeros and nulls ^^
+#----------------------------------------------------------------------------------------#
+###### Do things to the above zeros and nulls ^^
 
 def handle_missing_values(df, prop_to_drop_col, prop_to_drop_row):
     '''
@@ -357,8 +360,8 @@ def impute_knn(df, list_of_features, knn):
     return df
 
 
-#####################__________________________________
-# Removing outliers
+#----------------------------------------------------------------------------------------#
+###### Removing outliers
 
 
 def remove_outliers(df, col, multiplier):
